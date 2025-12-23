@@ -24,7 +24,7 @@ async def main():
             print(f"  Itinerary {idx}:")
             for seg in itin["segments"]:
                 print(
-                    f"    {seg['departure']['iataCode']} → {seg['arrival']['iataCode']} | "
+                    f"{seg['departure']['iataCode']} → {seg['arrival']['iataCode']} | "
                     f"{seg['carrierCode']}{seg['number']} | "
                     f"{seg['departure']['at']} → {seg['arrival']['at']}"
                 )
