@@ -1,6 +1,7 @@
 # Secrets
 .env
-
+__pycache__
+.cursor
 # Python
 __pycache__/
 *.pyc
