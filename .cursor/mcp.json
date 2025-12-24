@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "amadeus-flight-mcp": {
-      "command": "C:/Users/Dell/amadeus-multicity/.venv/Scripts/python.exe",
-      "args": ["server.py"],
-      "cwd": "C:/Users/Dell/amadeus-multicity"
-    }
-  }
-}
