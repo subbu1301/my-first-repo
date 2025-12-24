@@ -1,434 +1,359 @@
+import os
+import httpx
+from dotenv import load_dotenv
 from fastmcp import FastMCP
-from amadeus import (
-    search_multicity_india,
-    price_flight_offer,
-    get_seatmap_from_flight_offer,
-    get_seatmap_from_order,
-    create_flight_order,
-    retrieve_flight_order,
-    cancel_flight_order,
-    get_flight_inspiration,
-    get_cheapest_flight_dates,
-    get_flight_availability,
-    get_flight_status,
-    get_flight_checkin_links,
-    get_airline_name,
-    get_airline_routes,
-    search_activities,
-    search_activities_by_square,
-    get_activity_by_id,
-    search_cities
-)
 
+load_dotenv()
 
-mcp = FastMCP("amadeus-flight-mcp")
+BASE_V1 = "https://test.api.amadeus.com/v1"
+BASE_V2 = "https://test.api.amadeus.com/v2"
+BASE_V3 = "https://test.api.amadeus.com/v3"
 
-# -------------------------
-# Search: Multi-city India
-# -------------------------
-@mcp.tool()
-async def search_india_multicity_flights():
-    data = await search_multicity_india()
-    results = []
+mcp: FastMCP = FastMCP("Amadeus Hotels MCP")
 
-    for offer in data.get("data", []):
-        results.append({
-            "summary": {
-                "price": offer["price"]["grandTotal"],
-                "currency": offer["price"]["currency"],
-                "airlines": list({
-                    seg["carrierCode"]
-                    for itin in offer["itineraries"]
-                    for seg in itin["segments"]
-                }),
+# -----------------------
+# AUTH
+# -----------------------
+async def get_token():
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            "https://test.api.amadeus.com/v1/security/oauth2/token",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": os.getenv("AMADEUS_CLIENT_ID"),
+                "client_secret": os.getenv("AMADEUS_CLIENT_SECRET"),
             },
-            "flight_offer": offer
-        })
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        return r.json()["access_token"]
 
-    return results
+
+# =======================
+# HOTEL LIST APIs
+# =======================
+async def hotels_by_city(city_code: str):
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"cityCode": city_code}
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V1}/reference-data/locations/hotels/by-city",
+            headers=headers,
+            params=params,
+        )
+        return r.json()
 
 
-# -------------------------
-# Flight Inspiration
-# -------------------------
-@mcp.tool()
-async def flight_inspiration_search(
-    origin: str,
-    max_price: int = 10000,
-    currency: str = "INR",
-    departure_date: str | None = None
-):
-    response = await get_flight_inspiration(
-        origin, max_price, currency, departure_date
-    )
+async def hotels_by_geocode(latitude: float, longitude: float):
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"latitude": latitude, "longitude": longitude}
 
-    return [
-        {
-            "destination": item.get("destination"),
-            "price": item.get("price", {}).get("total"),
-            "currency": item.get("price", {}).get("currency"),
-            "departure_date": item.get("departureDate"),
-            "return_date": item.get("returnDate")
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V1}/reference-data/locations/hotels/by-geocode",
+            headers=headers,
+            params=params,
+        )
+        return r.json()
+
+
+async def hotels_by_ids(hotel_ids: str):
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"hotelIds": hotel_ids}
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V1}/reference-data/locations/hotels/by-hotels",
+            headers=headers,
+            params=params,
+        )
+        return r.json()
+
+
+# =======================
+# HOTEL SEARCH APIs
+# =======================
+async def hotel_offers(city_code: str):
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"cityCode": city_code}
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V3}/shopping/hotel-offers",
+            headers=headers,
+            params=params,
+        )
+        return r.json()
+
+
+async def hotel_offer_pricing(offer_id: str):
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V3}/shopping/hotel-offers/{offer_id}",
+            headers=headers,
+        )
+        return r.json()
+
+
+# =======================
+# HOTEL BOOKING
+# =======================
+async def book_hotel(offer_id: str, guest_first_name: str, guest_last_name: str):
+    token = await get_token()
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    body = {
+        "data": {
+            "offerId": offer_id,
+            "guests": [
+                {
+                    "name": {
+                        "firstName": guest_first_name,
+                        "lastName": guest_last_name,
+                    }
+                }
+            ]
         }
-        for item in response.get("data", [])
-    ]
+    }
+
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{BASE_V2}/booking/hotel-orders",
+            headers=headers,
+            json=body,
+        )
+        return r.json()
 
 
-# -------------------------
-# Cheapest Dates
-# -------------------------
-@mcp.tool()
-async def flight_cheapest_date_search(
-    origin: str,
-    destination: str,
-    currency: str = "INR"
+# =======================
+# HOTEL RATINGS
+# =======================
+async def hotel_ratings(hotel_ids: str):
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"hotelIds": hotel_ids}
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V2}/e-reputation/hotel-sentiments",
+            headers=headers,
+            params=params,
+        )
+        return r.json()
+
+
+# =======================
+# HOTEL NAME AUTOCOMPLETE
+# =======================
+async def hotel_name_autocomplete(keyword: str):
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {"keyword": keyword}
+
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V1}/reference-data/locations/hotel",
+            headers=headers,
+            params=params,
+        )
+        return r.json()
+
+# =======================
+# CARS & TRANSFERS APIs
+# =======================
+
+# Transfer Search (Get transfer offers)
+async def transfer_search(
+    start_latitude: float,
+    start_longitude: float,
+    end_latitude: float,
+    end_longitude: float
 ):
-    response = await get_cheapest_flight_dates(
-        origin, destination, currency
-    )
+    """
+    Search transfer offers between two locations
+    """
+    token = await get_token()
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
 
-    return [
-        {
-            "departure_date": item.get("departureDate"),
-            "return_date": item.get("returnDate"),
-            "price": item.get("price", {}).get("total"),
-            "currency": item.get("price", {}).get("currency")
+    body = {
+        "startLocationCode": f"{start_latitude},{start_longitude}",
+        "endLocationCode": f"{end_latitude},{end_longitude}",
+        "transferType": "PRIVATE"
+    }
+
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{BASE_V1}/shopping/transfer-offers",
+            headers=headers,
+            json=body
+        )
+        return r.json()
+
+
+# Transfer Booking (Create transfer order)
+async def transfer_booking(
+    offer_id: str,
+    first_name: str,
+    last_name: str,
+    email: str
+):
+    """
+    Book a transfer using an offerId
+    """
+    token = await get_token()
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    body = {
+        "data": {
+            "offerId": offer_id,
+            "passengers": [
+                {
+                    "firstName": first_name,
+                    "lastName": last_name,
+                    "contacts": {
+                        "email": email
+                    }
+                }
+            ]
         }
-        for item in response.get("data", [])
-    ]
-
-
-# -------------------------
-# Flight Availability
-# -------------------------
-@mcp.tool()
-async def check_flight_availability(
-    origin: str,
-    destination: str,
-    departure_date: str,
-    airline: str | None = None
-):
-    data = await get_flight_availability(
-        origin=origin,
-        destination=destination,
-        departure_date=departure_date,
-        airline=airline
-    )
-
-    results = []
-
-    for item in data.get("data", []):
-        for segment in item.get("segments", []):
-            results.append({
-                "airline": segment.get("carrierCode"),
-                "flight_number": segment.get("number"),
-                "aircraft": segment.get("aircraft", {}).get("code"),
-                "departure": segment.get("departure", {}).get("iataCode"),
-                "arrival": segment.get("arrival", {}).get("iataCode"),
-                "cabin": segment.get("cabin"),
-                "fare_class": segment.get("class"),
-                "seats_available": segment.get("availability", {}).get("seats")
-            })
-
-    return results
-
-
-# -------------------------
-# Pricing
-# -------------------------
-@mcp.tool()
-async def price_selected_flight(flight_offer: dict):
-    pricing = await price_flight_offer(flight_offer)
-    priced = pricing["data"]["flightOffers"][0]
-
-    return {
-        "priced_flight_offer": priced,
-        "currency": priced["price"]["currency"],
-        "total_price": priced["price"]["grandTotal"],
-        "base_price": priced["price"]["base"],
-        "last_ticketing_date": priced.get("lastTicketingDate"),
-        "bookable_seats": priced.get("numberOfBookableSeats"),
     }
 
-
-# -------------------------
-# SeatMap (pre-booking)
-# -------------------------
-@mcp.tool()
-async def show_seatmap_for_flight(flight_offer: dict):
-    response = await get_seatmap_from_flight_offer(flight_offer)
-    return response.get("data", [])
-
-
-# -------------------------
-# Booking
-# -------------------------
-@mcp.tool()
-async def create_flight_booking(priced_flight_offer: dict):
-    order = (await create_flight_order(priced_flight_offer))["data"]
-    records = order.get("associatedRecords", [])
-    pnr = records[0]["reference"] if records else None
-
-    return {
-        "order_id": order.get("id"),
-        "status": order.get("status"),
-        "pnr": pnr,
-    }
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{BASE_V1}/ordering/transfer-orders",
+            headers=headers,
+            json=body
+        )
+        return r.json()
 
 
-# -------------------------
-# Retrieve Booking
-# -------------------------
-@mcp.tool()
-async def retrieve_flight_booking(order_id: str):
-    order = (await retrieve_flight_order(order_id))["data"]
-    records = order.get("associatedRecords", [])
-    pnr = records[0]["reference"] if records else None
-
-    return {
-        "order_id": order.get("id"),
-        "status": order.get("status"),
-        "pnr": pnr,
-        "travelers": order.get("travelers"),
-    }
-
-
-# -------------------------
-# SeatMap (post-booking)
-# -------------------------
-@mcp.tool()
-async def show_seatmap_for_booking(order_id: str):
-    return (await get_seatmap_from_order(order_id)).get("data", [])
-
-
-# -------------------------
-# Cancel Booking
-# -------------------------
-@mcp.tool()
-async def cancel_flight_booking(order_id: str):
-    order = (await cancel_flight_order(order_id))["data"]
-    return {
-        "order_id": order.get("id"),
-        "status": order.get("status")
-    }
-
-# -------------------------------
-# Flight Status
-# -------------------------------
-
-@mcp.tool()
-async def flight_status(
-    carrier_code: str,
-    flight_number: str,
-    departure_date: str
+# Transfer Management (Cancel transfer)
+async def cancel_transfer(
+    order_id: str,
+    transfer_id: str
 ):
     """
-    Get real-time flight status.
-
-    Example:
-    carrier_code: "AI"
-    flight_number: "101"
-    departure_date: "2025-01-10"
+    Cancel a transfer in an existing order
     """
-
-    data = await get_flight_status(
-        carrier_code,
-        flight_number,
-        departure_date
-    )
-
-    results = []
-
-    for flight in data.get("data", []):
-        results.append({
-            "flight": f'{flight["carrierCode"]}{flight["flightNumber"]}',
-            "status": flight.get("status"),
-            "departure": {
-                "airport": flight["departure"]["iataCode"],
-                "terminal": flight["departure"].get("terminal"),
-                "gate": flight["departure"].get("gate"),
-                "time": flight["departure"]["scheduledTimeLocal"]
-            },
-            "arrival": {
-                "airport": flight["arrival"]["iataCode"],
-                "terminal": flight["arrival"].get("terminal"),
-                "gate": flight["arrival"].get("gate"),
-                "time": flight["arrival"]["scheduledTimeLocal"]
-            },
-            "aircraft": flight.get("aircraft", {}).get("code")
-        })
-
-    return results
-
-# -------------------------------------------------
-# Check-in Links
-# -------------------------------------------------
-
-@mcp.tool()
-async def get_airline_checkin_link(
-    airline_code: str,
-    language: str = "EN"
-):
-    """
-    Get online check-in link for an airline.
-
-    Example:
-    airline_code = "AI"
-    language = "EN"
-    """
-
-    data = await get_flight_checkin_links(
-        airline_code=airline_code,
-        language=language
-    )
-
-    results = []
-
-    for item in data.get("data", []):
-        results.append({
-            "airline": item.get("airlineCode"),
-            "url": item.get("url"),
-            "language": item.get("language")
-        })
-
-    return results
-
-
-@mcp.tool()
-async def airline_code_lookup(codes: list[str]):
-    """
-    Get airline names from IATA or ICAO codes.
-    Example: ["EK", "AI"]
-    """
-
-    data = await get_airline_name(codes)
-
-    results = []
-
-    for airline in data.get("data", []):
-        results.append({
-            "name": airline.get("businessName"),
-            "iata_code": airline.get("iataCode"),
-            "icao_code": airline.get("icaoCode")
-        })
-
-    return results
-
-# -------------------------------------------------
-# Airline Routes MCP Tool
-# -------------------------------------------------
-@mcp.tool()
-async def airline_routes(airline_code: str):
-    """
-    Returns all destinations served by an airline.
-    Example: airline_code = 'EK'
-    """
-    data = await get_airline_routes(airline_code)
-
-    results = []
-    for item in data.get("data", []):
-        results.append({
-            "city_name": item.get("name"),
-            "iata_code": item.get("iataCode"),
-            "country": item.get("address", {}).get("countryName"),
-        })
-
-    return {
-        "airline_code": airline_code,
-        "destinations": results
+    token = await get_token()
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
     }
 
-# ---------------------------------------------------------
-# Tours & Activities MCP Tools
-# ---------------------------------------------------------
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{BASE_V1}/ordering/transfer-orders/{order_id}/transfers/{transfer_id}/cancellation",
+            headers=headers
+        )
+        return r.json()
 
-@mcp.tool()
-async def find_activities_nearby(
-    latitude: float,
-    longitude: float,
-    radius_km: int = 5
-):
+# =======================
+# MARKET INSIGHTS APIs
+# =======================
+
+# Flight Most Traveled Destinations
+async def flight_most_traveled_destinations(origin_city_code: str, period: str = "2023-01"):
     """
-    Find tours & activities near a location.
+    Returns the most traveled destinations from a city
     """
-    data = await search_activities(latitude, longitude, radius_km)
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {
+        "originCityCode": origin_city_code,
+        "period": period
+    }
 
-    results = []
-    for act in data.get("data", []):
-        results.append({
-            "id": act.get("id"),
-            "name": act.get("name"),
-            "shortDescription": act.get("shortDescription"),
-            "rating": act.get("rating"),
-            "price": act.get("price", {}).get("amount"),
-            "currency": act.get("price", {}).get("currencyCode"),
-            "bookingLink": act.get("bookingLink")
-        })
-
-    return results
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V1}/travel/analytics/air-traffic/traveled",
+            headers=headers,
+            params=params
+        )
+        return r.json()
 
 
-@mcp.tool()
-async def find_activities_by_area(
-    north: float,
-    south: float,
-    east: float,
-    west: float
-):
+# Flight Most Booked Destinations
+async def flight_most_booked_destinations(origin_city_code: str, period: str = "2023-01"):
     """
-    Find tours & activities inside a square area.
+    Returns the most booked destinations from a city
     """
-    data = await search_activities_by_square(north, south, east, west)
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {
+        "originCityCode": origin_city_code,
+        "period": period
+    }
 
-    return [
-        {
-            "id": act.get("id"),
-            "name": act.get("name"),
-            "rating": act.get("rating"),
-            "bookingLink": act.get("bookingLink")
-        }
-        for act in data.get("data", [])
-    ]
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V1}/travel/analytics/air-traffic/booked",
+            headers=headers,
+            params=params
+        )
+        return r.json()
 
 
-@mcp.tool()
-async def get_activity_details(activity_id: str):
+# Flight Busiest Traveling Period
+async def flight_busiest_traveling_period(origin_city_code: str, destination_city_code: str):
     """
-    Get full details of one activity.
+    Returns busiest traveling period between two cities
     """
-    data = await get_activity_by_id(activity_id)
-    return data.get("data")
+    token = await get_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {
+        "originCityCode": origin_city_code,
+        "destinationCityCode": destination_city_code
+    }
 
-# ---------------------------------------------------------
-# City Search MCP Tool
-# ---------------------------------------------------------
+    async with httpx.AsyncClient() as client:
+        r = await client.get(
+            f"{BASE_V1}/travel/analytics/air-traffic/busiest-period",
+            headers=headers,
+            params=params
+        )
+        return r.json()
 
-@mcp.tool()
-async def city_search(keyword: str):
-    """
-    Find cities matching a keyword (autocomplete).
-    Example: "Dub" → Dubai, Dublin, etc.
-    """
-    data = await search_cities(keyword)
 
-    results = []
-    for city in data.get("data", []):
-        results.append({
-            "name": city.get("name"),
-            "cityCode": city.get("iataCode"),
-            "country": city.get("address", {}).get("countryName"),
-            "countryCode": city.get("address", {}).get("countryCode"),
-            "timezone": city.get("timeZone"),
-            "latitude": city.get("geoCode", {}).get("latitude"),
-            "longitude": city.get("geoCode", {}).get("longitude"),
-            "nearestAirport": city.get("relatedLocations", [{}])[0].get("iataCode")
-        })
+# =======================
+# REGISTER ALL TOOLS
+# =======================
+mcp.tool(hotels_by_city)
+mcp.tool(hotels_by_geocode)
+mcp.tool(hotels_by_ids)
 
-    return results
+mcp.tool(hotel_offers)
+mcp.tool(hotel_offer_pricing)
+
+mcp.tool(book_hotel)
+
+mcp.tool(hotel_ratings)
+
+mcp.tool(hotel_name_autocomplete)
+
+mcp.tool(transfer_search)
+mcp.tool(transfer_booking)
+mcp.tool(cancel_transfer)
+
+mcp.tool(flight_most_traveled_destinations)
+mcp.tool(flight_most_booked_destinations)
+mcp.tool(flight_busiest_traveling_period)
 
 if __name__ == "__main__":
-    try:
-        mcp.run()
-    except KeyboardInterrupt:
-        pass
-
+    mcp.run()
