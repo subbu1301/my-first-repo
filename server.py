@@ -108,10 +108,12 @@ async def check_flight_availability(
     departure_date: str,
     airline: str | None = None
 ):
-    # Note: the underlying helper may not accept an `airline` keyword argument
-    # in all environments, so we ignore it here for compatibility and only
-    # pass the required fields.
-    data = await get_flight_availability(origin, destination, departure_date)
+    data = await get_flight_availability(
+        origin=origin,
+        destination=destination,
+        departure_date=departure_date,
+        airline=airline
+    )
 
     results = []
 
