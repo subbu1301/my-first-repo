@@ -32,7 +32,7 @@ async def get_token():
 # -----------------------
 async def test_token():
     token = await get_token()
-    print("✅ TOKEN OK:", token[:20], "...")
+    print(" TOKEN OK:", token[:20], "...")
 
 
 # -----------------------
@@ -50,7 +50,7 @@ async def test_hotels_by_city():
         )
         r.raise_for_status()
         data = r.json()
-        print("✅ HOTELS BY CITY OK")
+        print(" HOTELS BY CITY OK")
         print("Count:", data["meta"]["count"])
 
 
@@ -84,7 +84,7 @@ async def test_transfer_search():
         )
         r.raise_for_status()
         data = r.json()
-        print("✅ TRANSFER SEARCH OK")
+        print(" TRANSFER SEARCH OK")
         print("Offers:", len(data.get("data", [])))
 
 
@@ -108,7 +108,7 @@ async def test_air_traffic_traveled():
             params=params,
         )
         r.raise_for_status()
-        print("✅ AIR TRAFFIC TRAVELED OK")
+        print(" AIR TRAFFIC TRAVELED OK")
         print(r.json())
 
 
@@ -134,12 +134,12 @@ async def test_busiest_travel_period():
 
         # Sandbox limitation handling
         if r.status_code == 400:
-            print("⚠️ BUSIEST PERIOD not supported in TEST environment")
+            print(" BUSIEST PERIOD not supported in TEST environment")
             print(r.json())
             return
 
         r.raise_for_status()
-        print("✅ BUSIEST TRAVEL PERIOD OK")
+        print(" BUSIEST TRAVEL PERIOD OK")
         print(r.json())
 
 
