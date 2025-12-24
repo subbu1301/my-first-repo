@@ -78,14 +78,39 @@ async def search_multicity_india() -> dict:
 # -------------------------------------------------
 async def price_flight_offer(flight_offer: dict) -> dict:
     token = await get_access_token()
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-    body = {"data": {"type": "flight-offers-pricing", "flightOffers": [flight_offer]}}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    body = {
+        "data": {
+            "type": "flight-offers-pricing",
+            "flightOffers": [flight_offer],
+            "pricingOptions": {
+                "fareType": ["PUBLISHED"],
+                "includedCheckedBagsOnly": True
+            },
+            "validatePricing": True
+        }
+    }
 
     async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.post(FLIGHT_PRICING_URL, headers=headers, json=body)
+        res = await client.post(
+            FLIGHT_PRICING_URL,
+            headers=headers,
+            json=body
+        )
+
+        # IMPORTANT: print error details if pricing fails
+        if res.status_code != 200:
+            print("❌ Pricing error response:")
+            print(res.text)
+
         res.raise_for_status()
         return res.json()
+
 
 # -------------------------------------------------
 # Seatmaps
@@ -156,23 +181,83 @@ async def cancel_flight_order(order_id: str) -> dict:
 # -------------------------------------------------
 # Inspiration / Cheapest Dates / Availability
 # -------------------------------------------------
-async def get_flight_inspiration(origin: str, max_price: int = 10000, currency: str = "INR") -> dict:
+async def get_flight_inspiration(
+    origin: str,
+    max_price: int,
+    currency: str | None = None
+):
     token = await get_access_token()
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {"origin": origin, "maxPrice": max_price, "currency": currency}
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    params = {
+        "origin": origin,
+        "maxPrice": max_price
+    }
+
+    # Add currency ONLY if it's a real value
+    if currency is not None and currency != "":
+        params["currency"] = currency
+
     async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(FLIGHT_INSPIRATION_URL, headers=headers, params=params)
+        res = await client.get(
+            "https://test.api.amadeus.com/v1/shopping/flight-destinations",
+            headers=headers,
+            params=params
+        )
+
+        # Sandbox can randomly fail
+        if res.status_code >= 500:
+            return {
+                "data": [],
+                "warning": "Sandbox internal error (500)"
+            }
+
         res.raise_for_status()
         return res.json()
 
-async def get_cheapest_flight_dates(origin: str, destination: str, currency: str = "INR") -> dict:
+
+
+async def get_cheapest_flight_dates(
+    origin: str,
+    destination: str,
+    currency: str = "INR"
+) -> dict:
     token = await get_access_token()
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {"origin": origin, "destination": destination, "currency": currency}
+
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+
+    params = {
+        "origin": origin,
+        "destination": destination
+    }
+
+    # Add currency only if provided
+    if currency:
+        params["currency"] = currency
+
     async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(CHEAPEST_DATE_URL, headers=headers, params=params)
+        res = await client.get(
+            CHEAPEST_DATE_URL,
+            headers=headers,
+            params=params
+        )
+
+        # ✅ HANDLE SANDBOX SERVER ERRORS FIRST
+        if res.status_code >= 500:
+            return {
+                "data": [],
+                "warning": "Sandbox internal error (500)"
+            }
+
         res.raise_for_status()
         return res.json()
+
+
 
 async def get_flight_availability(origin: str, destination: str, departure_date: str) -> dict:
     token = await get_access_token()
