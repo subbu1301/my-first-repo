@@ -105,7 +105,7 @@ async def price_flight_offer(flight_offer: dict) -> dict:
 
         # IMPORTANT: print error details if pricing fails
         if res.status_code != 200:
-            print("❌ Pricing error response:")
+            print(" Pricing error response:")
             print(res.text)
 
         res.raise_for_status()
@@ -247,7 +247,7 @@ async def get_cheapest_flight_dates(
             params=params
         )
 
-        # ✅ HANDLE SANDBOX SERVER ERRORS FIRST
+        #  HANDLE SANDBOX SERVER ERRORS FIRST
         if res.status_code >= 500:
             return {
                 "data": [],
