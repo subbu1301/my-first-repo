@@ -4,7 +4,7 @@ from amadeus import get_cheapest_flight_dates
 
 
 async def main():
-    print("📅 Cheapest Date Search Test\n")
+    print(" Cheapest Date Search Test\n")
 
     # Sandbox-friendly route
     origin = "DXB"
@@ -22,16 +22,16 @@ async def main():
         currency=currency
     )
 
-    print("📦 Raw API Response:")
+    print(" Raw API Response:")
     print(json.dumps(response, indent=2))
 
     data = response.get("data", [])
 
     if not data:
-        print("\n⚠️ No cheapest dates returned (normal in sandbox)")
+        print("\n No cheapest dates returned (normal in sandbox)")
         return
 
-    print("\n💸 Cheapest flight dates:")
+    print("\n Cheapest flight dates:")
     for item in data[:10]:
         print(
             f"Departure: {item.get('departureDate')} | "
